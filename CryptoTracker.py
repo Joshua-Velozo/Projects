@@ -1,93 +1,89 @@
-import requests
-from tabulate import tabulate
+import hashlib
 import json
+import time
 
-portfolio = []
+
+class Blockchain:
+    def __init__(self):
+        self.chain = []
+        self.current_transactions = []
+        self.create_block(proof=1, previous_hash="0000000000000000000") # Genesis block
+
+    def hash(self, block):
+        #solution
+        #block['transactions'] = json.dumps(block['transactions'], sort_keys=True)
+
+        json_from_block = json.dumps(block, sort_keys=True)
+        encoded_block = json_from_block.encode()
+        return hashlib.sha256(encoded_block).hexdigest()
 
 
-print("Crypto Portfolio Tracker")
-print("Type 'done' when you're finished.\n")
+    def create_block(self, proof, previous_hash):
+        block = {
+            'index': len(self.chain) + 1,
+            'timestamp': time.time(),
+            'transactions': self.current_transactions,
+            'proof': proof,
+            'previous_hash': previous_hash,
+        }
+        self.current_transactions = []
+        self.chain.append(block)
+        return block
+    
+    def get_previous_block(self):
+        return self.chain[-1]
+    
+    def new_transaction(self, sender, recipient, amount):
+        self.current_transactions.append({
+            'sender': sender,
+            'recipient': recipient,
+            'amount': amount,
+        })
+        return self.get_previous_block()['index'] + 1
+    
+    def proof_of_work(self, previous_proof):
+        new_proof = 1
+        while True:
+            hash_operation = hashlib.sha256(str(new_proof**2 - previous_proof**2).encode()).hexdigest()
+            if hash_operation[:4] == '0000':
+                return new_proof
+            new_proof += 1
 
-while True:
-    coin = input("Enter the coin name, type 'done' to finish: ").lower()
-    if coin == "done":
-        break
+    def is_chain_valid(self):
+        for i in range(1, len(self.chain)):
+            prev_block = self.chain[i - 1]
+            curr_block = self.chain[i]
+            
+            # if is correctly connected
+            if curr_block["previous_hash"] != self.hash(prev_block):
+                return False
 
-    quantity_input = input(f"How much {coin} do you own? ")
-    if (quantity_input).isdigit() != True:
-        raise ValueError("Please enter a number")
-        
-   
+            # if last proof is valid
+            proof_valid = hashlib.sha256(str(curr_block["proof"]**2 - prev_block["proof"]**2).encode()).hexdigest()
+            if proof_valid[:4] != "0000":
+                return False
+            #these only checks if the previous block has been altered not if current block has been
 
-    purchase_price_input = input(f"What was your purchase price per {coin} (in USD)? ")
-    if (purchase_price_input).isdigit() != True:
-        raise ValueError("Please enter a number")
-        continue
+
+        return True
+
+blockchain = Blockchain()
+
+blockchain.new_transaction('Alice', 'Bob', 1)
+blockchain.new_transaction('Bob', 'Charlie', 2)
+blockchain.new_transaction('Charlie', 'Alice', 3)
+
+previous_block = blockchain.get_previous_block()
+proof = blockchain.proof_of_work(previous_block['proof'])
+block = blockchain.create_block(proof, blockchain.hash(previous_block))
+
+print(blockchain.chain)
+blockchain.chain[1]['transactions'] = []
+print(blockchain.chain)
+print(blockchain.is_chain_valid())
+
+
     
 
-    quantity = float(quantity_input)
-    purchase_price = float(purchase_price_input)
-
-    portfolio.append({
-        "symbol": coin,
-        "quantity": quantity,
-        "purchase_price": purchase_price
-    })
-    
-
-    
 
 
-
-
-
-def get_current_price(coin_id):
-    url = f"https://api.coingecko.com/api/v3/simple/price"
-    params = {"ids": coin_id, "vs_currencies": "usd"}
-    response = requests.get(url, params=params)
-    data = response.json()
-    if coin_id in data:
-        return data[coin_id]["usd"]
-    else:
-        print(f"Could not get price for {coin_id}")
-        return 0
-
-
-def calculate_portfolio(portfolio):
-    table = []
-    total_value = 0
-
-    for coin in portfolio:
-        symbol = coin["symbol"]
-        quantity = coin["quantity"]
-        purchase_price = coin["purchase_price"]
-
-        current_price = get_current_price(symbol)
-        value = quantity * current_price
-        total_value += value
-
-        if purchase_price > 0:
-            gain_percentage = ((current_price - purchase_price) / purchase_price) * 100
-        else:
-            gain_percentage = 0
-
-        table.append([
-            symbol.capitalize(),
-            quantity,
-            f"${purchase_price:,.2f}",
-            f"${current_price:,.2f}",
-            f"${value:,.2f}",
-            f"{gain_percentage:.2f}%"
-        ])
-
-    print("\nCryptocurrency Portfolio:\n")
-    headers = ["Coin", "quantity", "purchase price", "current price", "value", "gain/loss"]
-    print(tabulate(table, headers=headers, tablefmt="grid"))
-    print(f"\nTotal Portfolio = ${total_value:,.2f}\n")
-
-
-
-
-
-if __name__ == "__main__":
-    calculate_portfolio(portfolio)
